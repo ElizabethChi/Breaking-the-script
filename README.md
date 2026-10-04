@@ -29,6 +29,10 @@ Column count is derived from the feed's own width (7 → 6 → 5 → 3/4 → 2).
 - **Failures**: each slot falls back to a bundled image/colour tile if its query fails, so the first screen is never blank. Broken image URLs retry `thumbnail → url → neutral placeholder`.
 - **Infinite scroll** loads further pages when the sentinel nears the viewport.
 
+## Content safety
+
+Explicit imagery is never shown. `src/utils/safety.js` applies four layers: Openverse is asked to exclude sensitive results (`mature=false`, `unstable__include_sensitive_results=false`); results Openverse flags as mature/sensitive are dropped; results whose title or tags contain explicit terms are dropped (also re-checked on cached and saved pins); and searches containing explicit terms are refused without calling the API. Keyword filters can't catch everything, so extend the term list if something slips through. Local Create Pin uploads are not moderated, but they never leave your device.
+
 ## Interactions
 
 Search (Enter, or debounced typing; voice via Web Speech API when supported; camera opens an honest dialog — no image recognition is performed), topic filters, card hover Save, three-dot menu (Save / Share link / View source), detail modal with creator, license and attribution, local saves (`localStorage`, view them from the grid icon), Create Pin (local-only), notifications / messages popovers, feed options (image type, license type), settings and account menus.

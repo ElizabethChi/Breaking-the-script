@@ -10,6 +10,7 @@ import Toast from './components/Toast.jsx';
 import { TOPICS } from './data/topics.js';
 import { useFeed } from './hooks/useFeed.js';
 import { clearSearchCache } from './api/openverse.js';
+import { isBlockedQuery } from './utils/safety.js';
 
 const DEFAULT_FILTERS = { category: '', licenseType: 'commercial' };
 
@@ -112,8 +113,14 @@ function Discover() {
       offline: feed.offline,
       onLoadMore: feed.loadMore,
       onRetry: retry,
-      emptyTitle: searchQuery ? `No results for “${searchQuery}”` : 'No pins found',
-      emptyHint: 'Check the spelling, try a more general term, or loosen the feed options.',
+      emptyTitle: isBlockedQuery(searchQuery)
+        ? 'This search isn’t available'
+        : searchQuery
+          ? `No results for “${searchQuery}”`
+          : 'No pins found',
+      emptyHint: isBlockedQuery(searchQuery)
+        ? 'Explicit content is never shown here. Try a different search.'
+        : 'Check the spelling, try a more general term, or loosen the feed options.',
     };
   }
 

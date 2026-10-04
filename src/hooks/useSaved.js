@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isSafeItem } from '../utils/safety.js';
 
 const KEY = 'discover:saved:v1';
 
 function load() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter(isSafeItem) : [];
   } catch {
     return [];
   }

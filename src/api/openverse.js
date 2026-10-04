@@ -1,10 +1,12 @@
 // Openverse Images API client: normalisation, caching, throttling and error handling.
 // Docs: https://api.openverse.org/v1/  (anonymous limits: ~20 req/min burst, 200 req/day sustained)
 
+import { isBlockedQuery, isSafeItem, isSafeResult } from '../utils/safety.js';
+
 const ENDPOINT = 'https://api.openverse.org/v1/images/';
 const REQUEST_TIMEOUT_MS = 9000;
 const MAX_REQUESTS_PER_MINUTE = 18; // stay under the anonymous burst limit of 20/min
-const SESSION_PREFIX = 'openverse:v1:';
+const SESSION_PREFIX = 'openverse:v2:'; // bumped: older cached results predate the safety filter
 
 export class OpenverseError extends Error {
   constructor(message, { status = 0, rateLimited = false, exhausted = false } = {}) {
@@ -86,6 +88,7 @@ export function normalizeResult(r) {
     licenseUrl: r.license_url || null,
     provider: r.provider || r.source || null,
     attribution: r.attribution || null,
+    tags: Array.isArray(r.tags) ? r.tags.slice(0, 12).map((t) => t && t.name).filter(Boolean) : [],
   };
 }
 
@@ -96,6 +99,7 @@ function buildUrl({ q, page, pageSize, aspectRatio, category, licenseType }) {
     ['page_size', pageSize],
     ['license_type', licenseType],
     ['mature', 'false'],
+    ['unstable__include_sensitive_results', 'false'],
   ];
   if (aspectRatio) params.push(['aspect_ratio', aspectRatio]);
   if (category) params.push(['category', category]);
@@ -152,16 +156,17 @@ export function searchImages({
   licenseType = 'commercial',
 }) {
   const query = (q || '').trim();
-  if (!query) return Promise.resolve({ items: [], page, pageCount: 0, resultCount: 0 });
+  if (!query || isBlockedQuery(query)) return Promise.resolve({ items: [], page, pageCount: 0, resultCount: 0 });
 
   const opts = { q: query, page, pageSize, aspectRatio, category, licenseType };
   const cacheKey = JSON.stringify(opts);
 
-  if (memoryCache.has(cacheKey)) return Promise.resolve(memoryCache.get(cacheKey));
+  const clean = (value) => ({ ...value, items: value.items.filter(isSafeItem) });
+  if (memoryCache.has(cacheKey)) return Promise.resolve(clean(memoryCache.get(cacheKey)));
   const stored = readSession(cacheKey);
   if (stored) {
     memoryCache.set(cacheKey, stored);
-    return Promise.resolve(stored);
+    return Promise.resolve(clean(stored));
   }
   if (inflight.has(cacheKey)) return inflight.get(cacheKey);
 
@@ -169,6 +174,7 @@ export function searchImages({
     .then((json) => {
       const seen = new Set();
       const items = (json.results || [])
+        .filter(isSafeResult)
         .map(normalizeResult)
         .filter((item) => {
           if (!item || seen.has(item.id) || seen.has(item.url)) return false;
