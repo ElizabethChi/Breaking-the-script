@@ -1,948 +1,699 @@
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  AnimatePresence,
-  MotionConfig,
-  animate,
-  motion,
-  useMotionTemplate,
-  useMotionValue,
-  useReducedMotion,
-  useScroll,
-  useSpring,
-  useTransform,
-} from 'motion/react';
-import Lenis from 'lenis';
+import { useEffect, useMemo, useState } from 'react';
 
-const PRODUCT_API = 'https://dummyjson.com/products/category/fragrances?limit=12';
+const STARTER = `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body {
+      font-family: Georgia, serif;
+      max-width: 28em;
+      margin: 3em auto;
+      background: #faf6ef;
+      color: #1a1612;
+      line-height: 1.5;
+    }
+    h1 { font-weight: normal; font-size: 2rem; }
+  </style>
+</head>
+<body>
+  <h1>Hello, internet.</h1>
+  <p>Change this text. You just edited a website.</p>
+</body>
+</html>
+`;
 
-const FALLBACK_PRODUCTS = [
-  {
-    id: 'slow-burn',
-    title: 'Slow Burn',
-    brand: 'Sillage Studio',
-    price: 88,
-    description: 'A warm, close-to-skin fragrance with a spark of pink pepper.',
-    image: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=1000&q=85',
-    fallbackImage: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&w=1000&q=85',
-    volume: '50 ML',
-    notes: 'PINK PEPPER · AMBER · SKIN MUSK',
-  },
-  {
-    id: 'moss-study',
-    title: 'Moss Study',
-    brand: 'Sillage Studio',
-    price: 94,
-    description: 'Green, damp earth and the kind of quiet that follows rain.',
-    image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=1000&q=85',
-    fallbackImage: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=1000&q=85',
-    volume: '50 ML',
-    notes: 'GALBANUM · FIG LEAF · CEDAR',
-  },
-  {
-    id: 'soft-static',
-    title: 'Soft Static',
-    brand: 'Sillage Studio',
-    price: 76,
-    description: 'A clean flash of citrus settling into a soft cotton musk.',
-    image: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=1000&q=85',
-    fallbackImage: 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=1000&q=85',
-    volume: '30 ML',
-    notes: 'BERGAMOT · IRIS · WHITE MUSK',
-  },
-  {
-    id: 'midnight-fig',
-    title: 'Midnight Fig',
-    brand: 'Sillage Studio',
-    price: 102,
-    description: 'Dark fruit, warm woods and the last hour of the night.',
-    image: 'https://images.unsplash.com/photo-1595425970377-c9703cf48b6d?auto=format&fit=crop&w=1000&q=85',
-    fallbackImage: 'https://images.unsplash.com/photo-1595425970377-c9703cf48b6d?auto=format&fit=crop&w=1000&q=85',
-    volume: '50 ML',
-    notes: 'BLACK FIG · TONKA · VETIVER',
-  },
+const SECTIONS = [
+  { id: 'files', n: '01', label: 'Files' },
+  { id: 'prompt', n: '02', label: 'Prompt' },
+  { id: 'preview', n: '03', label: 'Preview' },
+  { id: 'platforms', n: '04', label: 'Platforms' },
+  { id: 'link', n: '05', label: 'Link' },
 ];
 
-const NOTES = [
-  'PINK PEPPER · AMBER · SKIN MUSK',
-  'GALBANUM · FIG LEAF · CEDAR',
-  'BERGAMOT · IRIS · WHITE MUSK',
-  'BLACK FIG · TONKA · VETIVER',
-  'NEROLI · TEA LEAF · SOFT WOOD',
-  'ROSE PETAL · SAFFRON · SUEDE',
-];
-
-function formatPrice(price) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(price || 0);
-}
-
-function normaliseProducts(items) {
-  return items.map((item, index) => {
-    const fallback = FALLBACK_PRODUCTS[index % FALLBACK_PRODUCTS.length];
-    const image = Array.isArray(item.images) && item.images.length ? item.images[0] : item.thumbnail;
-    return {
-      id: item.id,
-      title: item.title || fallback.title,
-      brand: item.brand || 'Sillage Studio',
-      price: Number(item.price) || fallback.price,
-      description: item.description || fallback.description,
-      image: image || fallback.image,
-      fallbackImage: fallback.fallbackImage,
-      volume: index % 3 === 1 ? '30 ML' : '50 ML',
-      notes: NOTES[index % NOTES.length],
-      rating: item.rating,
-    };
-  });
-}
-
-function ArrowIcon({ direction = 'right', className = '' }) {
-  return (
-    <svg className={className} aria-hidden="true" viewBox="0 0 24 24" fill="none">
-      {direction === 'left' ? (
-        <path d="M19 12H5M5 12l6.5-6.5M5 12l6.5 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      ) : (
-        <path d="M5 12h14m0 0-6.5-6.5M19 12l-6.5 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      )}
-    </svg>
-  );
-}
-
-function BagIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-      <path d="M5.5 8.5h13l1 12h-15l1-12Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M9 9V6.25a3 3 0 0 1 6 0V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
-      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function Reveal({ children, className = '', delay = 0 }) {
-  const elementRef = useRef(null);
-  const [visible, setVisible] = useState(false);
+export default function App() {
+  const [active, setActive] = useState('files');
 
   useEffect(() => {
-    const node = elementRef.current;
-    if (!node) return undefined;
-    if (!('IntersectionObserver' in window)) {
-      setVisible(true);
-      return undefined;
-    }
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setVisible(true);
-          observer.disconnect();
-        }
+    const nodes = SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean);
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target?.id) setActive(visible.target.id);
       },
-      { threshold: 0.1 },
+      { rootMargin: '-30% 0px -50% 0px', threshold: [0.15, 0.4, 0.7] },
     );
-    observer.observe(node);
-    return () => observer.disconnect();
+    nodes.forEach((n) => io.observe(n));
+    return () => io.disconnect();
   }, []);
 
   return (
-    <div
-      ref={elementRef}
-      className={`reveal ${visible ? 'is-visible' : ''} ${className}`}
-      style={{ '--reveal-delay': `${delay}ms` }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ProductImage({ product, className = '', eager = false }) {
-  const [source, setSource] = useState(product.image || product.fallbackImage);
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    setSource(product.image || product.fallbackImage);
-    setUsingFallback(false);
-    setFailed(false);
-  }, [product.image, product.fallbackImage]);
-
-  function handleImageError() {
-    if (!usingFallback && product.fallbackImage && product.fallbackImage !== source) {
-      setUsingFallback(true);
-      setSource(product.fallbackImage);
-      return;
-    }
-    setFailed(true);
-  }
-
-  return (
-    <div className={`product-image ${className}`}>
-      {!failed ? (
-        <img
-          src={source}
-          alt={`${product.title} fragrance bottle`}
-          loading={eager ? 'eager' : 'lazy'}
-          fetchPriority={eager ? 'high' : 'auto'}
-          decoding="async"
-          referrerPolicy="no-referrer"
-          onError={handleImageError}
-        />
-      ) : (
-        <div className="bottle-placeholder" aria-hidden="true">
-          <span className="bottle-cap" />
-          <span className="bottle-body"><i>S.</i></span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Header({ bagCount, bagOpen, onBagClick }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const reduceMotion = useReducedMotion() ?? false;
-
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        setMenuOpen(false);
-        setMobileOpen(false);
-      }
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!mobileOpen) return undefined;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [mobileOpen]);
-
-  const closeMenus = () => {
-    setMenuOpen(false);
-    setMobileOpen(false);
-  };
-
-  const navLinks = [
-    { label: 'THE SHELF', href: '#shop', index: '01' },
-    { label: 'OUR RITUAL', href: '#ritual', index: '02' },
-    { label: 'THE STUDIO', href: '#about', index: '03' },
-  ];
-
-  return (
-    <header className="site-header flex items-center">
-      <a className="wordmark" href="#top" onClick={closeMenus} aria-label="Sillage home">
-        <span className="wordmark-mark" aria-hidden="true"><i /><i /><i /></span>
-        <span>SILLAGE<span className="wordmark-period">.</span></span>
+    <div className="site-wrap">
+      <a className="skip" href="#files">
+        Skip to lesson
       </a>
+      <header className="topbar">
+        <a className="brand" href="#top">
+          <span className="brand-mark">Prompt to Link</span>
+          <span className="brand-kicker">a field guide</span>
+        </a>
+        <nav className="top-nav" aria-label="Lesson sections">
+          {SECTIONS.map((s) => (
+            <a key={s.id} href={`#${s.id}`} className={active === s.id ? 'is-active' : ''}>
+              {s.n} {s.label}
+            </a>
+          ))}
+        </nav>
+      </header>
 
-      <div className="desktop-menu-root" onMouseLeave={() => setMenuOpen(false)}>
-        <motion.div
-          className="liquid-panel"
-          animate={{
-            width: menuOpen ? 340 : 140,
-            height: menuOpen ? 320 : 48,
-            paddingBottom: menuOpen ? 20 : 0,
-            borderRadius: menuOpen ? '20px 20px 0px 0px' : '999px',
-          }}
-          transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 28 }}
-        >
-          <button
-            className="liquid-menu-button"
-            type="button"
-            aria-expanded={menuOpen}
-            aria-controls="desktop-menu-panel"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span>{menuOpen ? 'CLOSE' : 'EXPLORE'}</span>
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                className="liquid-menu-icon"
-                key={menuOpen ? 'close' : 'open'}
-                initial={{ rotate: menuOpen ? -90 : 90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                exit={{ rotate: menuOpen ? 90 : -90, opacity: 0 }}
-                transition={{ duration: reduceMotion ? 0 : 0.2 }}
-                aria-hidden="true"
-              >
-                {menuOpen ? <CloseIcon /> : <ArrowIcon />}
-              </motion.span>
-            </AnimatePresence>
-          </button>
-          <AnimatePresence>
-            {menuOpen && (
-              <motion.nav
-                id="desktop-menu-panel"
-                className="liquid-menu-links"
-                aria-label="Main navigation"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={reduceMotion ? { duration: 0 } : { delay: 0.1, duration: 0.2 }}
-              >
-                {navLinks.map((item) => (
-                  <a key={item.href} href={item.href} onClick={closeMenus}>
-                    <span className="liquid-link-index">{item.index}</span>
-                    <span>{item.label}</span>
-                    <ArrowIcon />
-                  </a>
-                ))}
-                <span className="menu-note">LEAVE A LITTLE MYSTERY.</span>
-              </motion.nav>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-
-      <div className="header-actions">
-        <button className="mobile-menu-button" type="button" aria-expanded={mobileOpen} aria-controls="mobile-menu-sheet" onClick={() => setMobileOpen((open) => !open)}>
-          <span className={`hamburger ${mobileOpen ? 'is-open' : ''}`} aria-hidden="true"><i /><i /><i /></span>
-          <span className="mobile-menu-label">{mobileOpen ? 'CLOSE' : 'MENU'}</span>
-        </button>
-        <button className="bag-button" type="button" aria-expanded={bagOpen} aria-controls="bag-drawer" aria-label={`${bagOpen ? 'Close' : 'Open'} shopping bag, ${bagCount} ${bagCount === 1 ? 'item' : 'items'}`} onClick={onBagClick}>
-          <BagIcon />
-          <span className="bag-button-label">BAG</span>
-          <span className="bag-count" aria-live="polite">{bagCount}</span>
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            id="mobile-menu-sheet"
-            className="mobile-menu-sheet"
-            initial={{ clipPath: 'inset(0 0 100% 0)' }}
-            animate={{ clipPath: 'inset(0 0 0% 0)' }}
-            exit={{ clipPath: 'inset(0 0 100% 0)' }}
-            transition={reduceMotion ? { duration: 0 } : { duration: 0.45, ease: [0.76, 0, 0.24, 1] }}
-          >
-            <span className="mobile-sheet-overline">SILLAGE / THE SCENT STUDIO</span>
-            <nav aria-label="Mobile navigation">
-              {navLinks.map((item, index) => (
-                <motion.a
-                  key={item.href}
-                  href={item.href}
-                  onClick={closeMenus}
-                  initial={{ x: -40, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  transition={reduceMotion ? { duration: 0 } : { duration: 0.5, delay: 0.15 + 0.08 * index, ease: [0.25, 1, 0.5, 1] }}
-                >
-                  <span>{item.index}</span>{item.label}<ArrowIcon />
-                </motion.a>
-              ))}
-            </nav>
-            <div className="mobile-sheet-bottom"><span>SCENT, WITH A POINT OF VIEW.</span><span>EST. 2024</span></div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
-  );
-}
-
-function Hero({ product, reduceMotion }) {
-  const heroRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
-  const rotate = useTransform(scrollYProgress, [0, 0.5], [0, 2]);
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0.1]);
-
-  return (
-    <section ref={heroRef} id="top" className="hero-outer" aria-label="Sillage fragrance studio">
-      <motion.div className="hero-sticky" style={reduceMotion ? undefined : { scale, rotate, opacity }}>
-        <div className="hero-grain" aria-hidden="true" />
-        <div className="hero-orbit hero-orbit-one" aria-hidden="true" />
-        <div className="hero-orbit hero-orbit-two" aria-hidden="true" />
-        <div className="hero-content">
-          <div className="hero-kicker reveal is-visible">
-            <span className="micro-label">INDEPENDENT FRAGRANCE STUDIO</span>
-            <span className="hero-kicker-line" />
-            <span className="micro-label">NEW YORK · EVERYWHERE</span>
-          </div>
-          <div className="hero-title-wrap">
-            <div className="hero-title-line">
-              <span className="hero-side-note">SCENT<br />STUDY Nº 01</span>
-              <h1 className="hero-word" aria-label="Scent">
-                <span aria-hidden="true">SC</span>
-                <span className="hero-image-letter" aria-hidden="true">E</span>
-                <span aria-hidden="true">NT</span>
+      <main>
+        <header className="hero" id="top">
+          <div className="shell hero-grid">
+            <div>
+              <p className="kicker">Just the basics</p>
+              <h1>
+                From a prompt
+                <br />
+                <em>to a link.</em>
               </h1>
-              <span className="hero-side-note hero-side-note-right">EAU DE<br />PARFUM</span>
-              <div className="hero-product-frame">
-                <ProductImage product={product} eager />
-                <span className="hero-product-stamp">S / 01</span>
+              <p className="one-liner">
+                You describe a page. It becomes <strong>files</strong>. You put those files on a{' '}
+                <strong>host</strong>. The host gives you a <strong>link</strong>.
+              </p>
+            </div>
+            <aside className="hero-aside">
+              <p style={{ marginBottom: 0 }}>
+                You do not need to become a programmer first. You need five ideas, in this order.
+              </p>
+              <ol>
+                <li>
+                  <b>1</b>
+                  <span>A website is three kinds of files.</span>
+                </li>
+                <li>
+                  <b>2</b>
+                  <span>A prompt (or you) writes those files.</span>
+                </li>
+                <li>
+                  <b>3</b>
+                  <span>Your browser can open them privately.</span>
+                </li>
+                <li>
+                  <b>4</b>
+                  <span>GitHub stores them. A host publishes them.</span>
+                </li>
+                <li>
+                  <b>5</b>
+                  <span>The URL is what you share.</span>
+                </li>
+              </ol>
+            </aside>
+          </div>
+        </header>
+
+        <div className="shell" style={{ padding: '2rem 0 0' }}>
+          <CheatSheet />
+        </div>
+
+        <section className="block" id="files">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">01</div>
+              <div>
+                <p className="kicker">What a website is</p>
+                <h2>A website is a folder of files.</h2>
+              </div>
+            </div>
+
+            <div className="split">
+              <div className="prose">
+                <p className="lede">
+                  Every site you have ever used — this one, Google, a restaurant menu — is a browser reading
+                  files and drawing them on screen. That is the whole trick.
+                </p>
+                <p>
+                  There are only three kinds of files that matter at the start. HTML is the stuff on the page.
+                  CSS is how it looks. JavaScript is what it does when you click.
+                </p>
+                <p>
+                  A useful picture: HTML is the furniture, CSS is the paint and lighting, JavaScript is the
+                  doorbells and light switches. Take the furniture away and the paint has nothing to sit on.
+                </p>
+                <p className="note">
+                  The file named <code className="mono">index.html</code> is the front door. Browsers look for
+                  that name first.
+                </p>
+              </div>
+              <div>
+                <div className="folder" aria-label="A typical website folder">
+                  <div className="folder-bar">my-site/</div>
+                  <div className="file-row">
+                    <code>index.html</code>
+                    <span>The page itself — headings, text, images, buttons.</span>
+                  </div>
+                  <div className="file-row">
+                    <code>styles.css</code>
+                    <span>Colors, type, spacing, layout. The look.</span>
+                  </div>
+                  <div className="file-row">
+                    <code>script.js</code>
+                    <span>Clicks, forms, anything that moves or reacts.</span>
+                  </div>
+                </div>
+                <p className="note">
+                  You can start with a single HTML file. CSS and JS can even live inside it. More files come
+                  later, when you need them.
+                </p>
+              </div>
+            </div>
+
+            <LayerDemo />
+          </div>
+        </section>
+
+        <section className="block" id="prompt">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">02</div>
+              <div>
+                <p className="kicker">How the files get written</p>
+                <h2>A prompt is just a description.</h2>
+              </div>
+            </div>
+            <div className="split">
+              <div className="prose">
+                <p className="lede">
+                  “Build me a one-page site for my weekend bakery. Warm colors, the menu, hours, and a photo
+                  of bread.” That is a prompt. The output is those files.
+                </p>
+                <p>
+                  You can write the files yourself in any text editor, or have an AI write them from a
+                  description like the one above. Same files either way. A browser does not care who typed
+                  them.
+                </p>
+                <p>
+                  The skill is not memorizing code. The skill is knowing what the three files are, so you can
+                  tell whether the result is right — and what to ask for next.
+                </p>
+              </div>
+              <div className="card" style={{ background: 'var(--paper-2)' }}>
+                <p className="who">A prompt that works</p>
+                <h3>Be concrete.</h3>
+                <p>
+                  Say what the page is for, who it is for, what must be on it, and how it should feel. Mention
+                  pages (“just one page”), and any must-haves (menu, email, a photo).
+                </p>
+                <p style={{ marginBottom: 0 }}>
+                  Vague: “make me a website.” Useful: “a single page for a ceramicist named Jun, cream
+                  background, three photos, a price list, and a mailto link.”
+                </p>
               </div>
             </div>
           </div>
-          <div className="hero-bottom">
-            <div className="hero-script-lockup">
-              <p>Wear it like a <em>memory.</em></p>
-              <span className="hero-sticker">MADE TO<br />LINGER</span>
+        </section>
+
+        <section className="block" id="preview">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">03</div>
+              <div>
+                <p className="kicker">Seeing it before anyone else does</p>
+                <h2>Open the files in a browser. That is not the internet yet.</h2>
+              </div>
             </div>
-            <div className="hero-support-row">
-              <p>Fragrance for the part of you<br className="desktop-break" /> that never needs an introduction.</p>
-              <a className="button button-dark" href="#shop">
-                <span>FIND YOUR FREQUENCY</span><ArrowIcon />
-              </a>
+            <div className="split">
+              <div className="prose">
+                <p className="lede">
+                  Double-click <span className="mono">index.html</span>. It opens in Chrome or Safari. The
+                  address bar will say <span className="mono">file://</span> or{' '}
+                  <span className="mono">localhost</span>. Only you can see it. Your laptop is doing a dress
+                  rehearsal.
+                </p>
+                <p>
+                  If you are using a coding tool, it often runs a tiny local server and gives you a preview
+                  URL. Still private. Still not a link you can text to a friend.
+                </p>
+                <p>
+                  This step exists so you can fix the page before you publish. Does the menu look right? Is
+                  the photo huge? Click around. Then you put it online.
+                </p>
+              </div>
+              <div className="demo-frame">
+                <div className="demo-chrome">
+                  <span className="traffic" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <div className="addr">localhost:5173 — only you can see this</div>
+                </div>
+                <div className="demo-body" style={{ minHeight: 160 }}>
+                  <p style={{ margin: 0, textAlign: 'center', maxWidth: '18rem' }}>
+                    A private preview is a website that has not been given an address yet.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="hero-scroll-hint" aria-hidden="true"><span>SCROLL TO FEEL</span><i /></div>
+        </section>
+
+        <section className="block" id="platforms">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">04</div>
+              <div>
+                <p className="kicker">The only names to learn</p>
+                <h2>Three platforms. That is the whole stack.</h2>
+              </div>
+            </div>
+            <p className="lede prose">
+              You already have a browser. You need a place to keep the files, and a place that stays online
+              so other people can open them. Everything else is optional.
+            </p>
+
+            <div className="platforms">
+              <article className="card">
+                <p className="who">You already have this</p>
+                <h3>A browser</h3>
+                <p>
+                  Chrome, Safari, Firefox, Edge. It is both your preview tool and what your visitors will
+                  use. If it looks right here, it is a real page.
+                </p>
+                <p style={{ marginBottom: 0 }}>Nothing to install if you can read this sentence.</p>
+              </article>
+              <article className="card">
+                <p className="who">Storage, not a website</p>
+                <h3>GitHub</h3>
+                <p>
+                  A folder in the cloud, with history. This is where the code lives. The GitHub URL is a view
+                  of the files — it is usually not the site you share.
+                </p>
+                <p style={{ marginBottom: 0 }}>
+                  Think Google Drive, but for code. Free account. One “repository” per project.
+                </p>
+              </article>
+              <article className="card featured">
+                <p className="who">Pick one host</p>
+                <h3>Vercel</h3>
+                <p>
+                  Connect GitHub, click deploy, get a public URL. This is the computer that is always on.
+                  When a friend opens your link, Vercel sends them your files.
+                </p>
+                <p style={{ marginBottom: 0 }}>
+                  Netlify and GitHub Pages do the same job. Pick one and ignore the rest.
+                </p>
+              </article>
+            </div>
+
+            <div className="alt-hosts" aria-label="Other hosts">
+              <span className="pill">Netlify — same idea as Vercel</span>
+              <span className="pill">GitHub Pages — built into GitHub</span>
+              <span className="pill">Cloudflare Pages — also fine</span>
+            </div>
+
+            <div className="places" aria-label="The same files in three places">
+              <div className="place">
+                <h3>Your laptop</h3>
+                <p>Private. Address starts with file:// or localhost. Fine for drafting.</p>
+              </div>
+              <div className="arrow" aria-hidden="true">
+                →
+              </div>
+              <div className="place">
+                <h3>GitHub</h3>
+                <p>
+                  Backup and history. URL looks like github.com/you/bakery — that is the code, not the shop
+                  window.
+                </p>
+              </div>
+              <div className="arrow" aria-hidden="true">
+                →
+              </div>
+              <div className="place public">
+                <h3>The host</h3>
+                <p>Public. URL looks like bakery.vercel.app. This is the link you send.</p>
+              </div>
+            </div>
+            <p className="note">
+              Same files, three places. Only the host is the website. Mixing up the GitHub URL and the Vercel
+              URL is the most common mix-up in this whole process.
+            </p>
+          </div>
+        </section>
+
+        <section className="block" id="link">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">05</div>
+              <div>
+                <p className="kicker">Getting it on the internet</p>
+                <h2>Hosting turns the folder into an address.</h2>
+              </div>
+            </div>
+            <div className="split">
+              <div className="prose">
+                <p className="lede">
+                  A link is not a mysterious object. It is a street address for your files. When someone types
+                  it, their browser asks the host for <span className="mono">index.html</span>, then draws
+                  whatever comes back.
+                </p>
+                <p>
+                  You do not buy a server. You do not need a custom name like{' '}
+                  <span className="mono">bakery.com</span> on day one. The free address{' '}
+                  <span className="mono">something.vercel.app</span> is a real website. People can open it on
+                  their phones. Your laptop can be off.
+                </p>
+                <p>
+                  Later, if you want, you buy a domain (Namecheap, Google Domains, Cloudflare) and point it at
+                  the same host. Same site, fancier address. Skip it until you care.
+                </p>
+              </div>
+              <div className="card featured">
+                <p className="who">What happens when they open your link</p>
+                <h3>Four steps, a second or two.</h3>
+                <ul>
+                  <li>They type the URL, or tap it.</li>
+                  <li>The browser asks Vercel (or Netlify, or Pages) for your files.</li>
+                  <li>The host sends HTML, CSS, and JavaScript.</li>
+                  <li>Their browser draws the page. You are not in that conversation.</li>
+                </ul>
+              </div>
+            </div>
+
+            <h3 className="serif" style={{ marginTop: '2.4rem', fontSize: '1.8rem' }}>
+              The actual recipe
+            </h3>
+            <div className="recipe">
+              <Recipe n="1" title="Describe the page.">
+                To an AI, or in a notebook. What it is, who it is for, what must be on it.
+              </Recipe>
+              <Recipe n="2" title="Get the files.">
+                At minimum, an index.html. Open it locally. Tinker until it feels right.
+              </Recipe>
+              <Recipe n="3" title="Put the folder on GitHub.">
+                Create a free account, create a repository, upload the files. This is backup plus the door
+                your host will use.
+              </Recipe>
+              <Recipe n="4" title="Connect a host.">
+                Sign into Vercel (or Netlify) with GitHub. Import the repository. Click Deploy. Wait a
+                minute.
+              </Recipe>
+              <Recipe n="5" title="Copy the URL.">
+                Something like my-bakery.vercel.app. That is the website. Send it.
+              </Recipe>
+            </div>
+          </div>
+        </section>
+
+        <section className="block" id="words">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">*</div>
+              <div>
+                <p className="kicker">A tiny dictionary</p>
+                <h2>Words you will hear, translated.</h2>
+              </div>
+            </div>
+            <div className="split-wide">
+              <p className="lede">
+                People in this world enjoy jargon. You do not need the jargon to ship a page. You do need to
+                not panic when it shows up.
+              </p>
+              <table className="words">
+                <thead>
+                  <tr>
+                    <th>Word</th>
+                    <th>Means</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Deploy</td>
+                    <td>Publish the files to the host. “Make it live.”</td>
+                  </tr>
+                  <tr>
+                    <td>Repo</td>
+                    <td>The project folder on GitHub. Short for repository.</td>
+                  </tr>
+                  <tr>
+                    <td>Commit / push</td>
+                    <td>Save a snapshot, then send it to GitHub.</td>
+                  </tr>
+                  <tr>
+                    <td>Localhost</td>
+                    <td>The private preview on your computer.</td>
+                  </tr>
+                  <tr>
+                    <td>Domain</td>
+                    <td>The name in the URL. Optional on day one.</td>
+                  </tr>
+                  <tr>
+                    <td>Static site</td>
+                    <td>Just files, no database. This is what you should build first.</td>
+                  </tr>
+                  <tr>
+                    <td>Frontend</td>
+                    <td>The pages people see. HTML, CSS, JS.</td>
+                  </tr>
+                  <tr>
+                    <td>Framework</td>
+                    <td>Extra tools on top (React, etc.). Useful later, not required.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section className="block" id="ignore">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">×</div>
+              <div>
+                <p className="kicker">Permission to skip</p>
+                <h2>You can ignore all of this for months.</h2>
+              </div>
+            </div>
+            <p className="lede prose">
+              The internet is full of tools that assume you are already building an app. You are building a
+              page. Different job.
+            </p>
+            <div className="ignore">
+              <ul>
+                <li>
+                  <strong>React, Next.js, Vue</strong>
+                  <span>Libraries for complicated interfaces. This lesson is not them, even if this page uses some extras under the hood.</span>
+                </li>
+                <li>
+                  <strong>Node, npm, package.json</strong>
+                  <span>A toolbox for JavaScript projects. You will meet them when a project needs them.</span>
+                </li>
+                <li>
+                  <strong>Databases, logins, payments</strong>
+                  <span>That is a backend. A first site should not have one.</span>
+                </li>
+                <li>
+                  <strong>AWS, Docker, “the cloud”</strong>
+                  <span>Vercel is already someone else’s computer. That is enough cloud.</span>
+                </li>
+                <li>
+                  <strong>Wix, Squarespace, WordPress</strong>
+                  <span>Fine products, different path: you work in their editor, they host it. Use them if you want a dashboard, not files.</span>
+                </li>
+                <li>
+                  <strong>A custom domain</strong>
+                  <span>Buy one when the free URL starts to bother you. Not before.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section className="block" id="try">
+          <div className="shell">
+            <div className="section-head">
+              <div className="sec-num">→</div>
+              <div>
+                <p className="kicker">Do this once</p>
+                <h2>Edit a website, right here.</h2>
+              </div>
+            </div>
+            <p className="lede prose">
+              The left side is an HTML file. The right side is a browser reading it. Change a word. That is
+              the entire job — you just did it without GitHub, Vercel, or a course.
+            </p>
+            <Playground />
+            <p className="note">
+              Save this as index.html on your computer, open it, and you have a local website. Put that file
+              on GitHub, connect Vercel, and you have a link.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      <footer className="foot">
+        <div className="shell">
+          <p>
+            <strong>That is the whole map.</strong>
+          </p>
+          <p>
+            Prompt → files → GitHub → host → URL. A browser, GitHub, and Vercel (or Netlify, or GitHub Pages).
+            Everything else can wait.
+          </p>
+          <div className="callout">
+            <p>
+              This page is itself a website: files, drawn by your browser, sitting on a host so you can open
+              it. There is no further secret.
+            </p>
+          </div>
         </div>
-      </motion.div>
-    </section>
+      </footer>
+    </div>
   );
 }
 
-function MarqueeCard({ product, index }) {
+function CheatSheet() {
+  const cells = [
+    { n: '01', t: 'Files', d: 'HTML is stuff. CSS is look. JS is behavior.' },
+    { n: '02', t: 'Prompt', d: 'A description that becomes those files.' },
+    { n: '03', t: 'Preview', d: 'Open them on your computer. Private.' },
+    { n: '04', t: 'Platforms', d: 'Browser. GitHub. One host.' },
+    { n: '05', t: 'Link', d: 'The host’s URL is what you share.' },
+  ];
   return (
-    <article className="marquee-card">
-      <div className="marquee-card-meta">
-        <span>OBJECT Nº {String(index + 1).padStart(2, '0')}</span>
-        <span className="marquee-dot" />
-        <span>50 ML</span>
-      </div>
-      <div className="marquee-card-visual"><ProductImage product={product} /></div>
-      <div className="marquee-card-copy">
-        <span className="marquee-note">{product.notes}</span>
-        <h3>{product.title}</h3>
-        <span className="marquee-card-price">{formatPrice(product.price)}</span>
-      </div>
-      <span className="marquee-card-corner" aria-hidden="true">↗</span>
-    </article>
+    <div className="sheet" aria-label="Cheat sheet">
+      {cells.map((c) => (
+        <div className="sheet-cell" key={c.n}>
+          <div className="sheet-n">{c.n}</div>
+          <p>
+            <strong>{c.t}</strong>
+            {c.d}
+          </p>
+        </div>
+      ))}
+    </div>
   );
 }
 
-function MarqueeRow({ products, reverse = false, rowIndex = 0 }) {
-  const items = products.length ? products : FALLBACK_PRODUCTS;
-  const copies = [0, 1];
+function Recipe({ n, title, children }) {
   return (
-    <div className={`marquee-row ${reverse ? 'marquee-row-reverse' : ''}`}>
-      <div className={`marquee-track ${reverse ? 'marquee-track-reverse' : ''}`}>
-        {copies.map((copy) => (
-          <div className="marquee-group" key={`${rowIndex}-${copy}`} aria-hidden={copy === 1 ? 'true' : undefined}>
-            {items.slice(0, 4).map((product, index) => (
-              <MarqueeCard key={`${copy}-${product.id}`} product={product} index={index + rowIndex * 4} />
-            ))}
-          </div>
-        ))}
+    <div className="recipe-row">
+      <div className="n">{n}</div>
+      <div>
+        <h3>{title}</h3>
+        <p>{children}</p>
       </div>
     </div>
   );
 }
 
-function Marquee({ products }) {
-  const list = products.length ? products : FALLBACK_PRODUCTS;
-  return (
-    <section className="marquee-section" aria-labelledby="marquee-heading">
-      <div className="marquee-heading-row">
-        <Reveal>
-          <span className="micro-label">A COLLECTION OF SMALL OBSESSIONS</span>
-          <h2 id="marquee-heading">Made to be <em>remembered.</em></h2>
-        </Reveal>
-        <a className="text-link" href="#shop">MEET THE SCENTS <ArrowIcon /></a>
-      </div>
-      <div className="marquee-wall" aria-label="Fragrance collection highlights">
-        <MarqueeRow products={list} rowIndex={0} />
-        <MarqueeRow products={[...list].reverse()} reverse rowIndex={1} />
-      </div>
-      <div className="marquee-footnote"><span>01 — 04 / THE FIRST EDITION</span><span>SCENT IS A PLACE YOU CAN RETURN TO.</span></div>
-    </section>
-  );
-}
+function LayerDemo() {
+  const [on, setOn] = useState({ html: true, css: true, js: true });
+  const [count, setCount] = useState(0);
 
-function StoryScene({ reduceMotion }) {
-  const sceneRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: sceneRef, offset: ['start start', 'end end'] });
-  const readingY = useTransform(scrollYProgress, [0, 0.5], ['0%', '-65%']);
-  const sceneScale = useTransform(scrollYProgress, [0.5, 1], [1, 0.9]);
-  const sceneY = useTransform(scrollYProgress, [0.5, 1], [0, -40]);
-  const blur = useTransform(scrollYProgress, [0.5, 1], [0, 4]);
-  const brightness = useTransform(scrollYProgress, [0.5, 1], [1, 0.5]);
-  const sceneFilter = useMotionTemplate`blur(${blur}px) brightness(${brightness})`;
-  const copyY = useTransform(scrollYProgress, [0.5, 0.82], [0, -150]);
-  const cardY = useTransform(scrollYProgress, [0.5, 0.82], [0, 150]);
-  const fade = useTransform(scrollYProgress, [0.5, 0.68], [1, 0]);
+  useEffect(() => {
+    setCount(0);
+  }, [on.html, on.js]);
 
-  const sceneStyle = reduceMotion ? undefined : { scale: sceneScale, y: sceneY, filter: sceneFilter };
-  const copyStyle = reduceMotion ? undefined : { y: copyY, opacity: fade };
-  const cardStyle = reduceMotion ? undefined : { y: cardY, opacity: fade };
+  const label = !on.js ? 'Click me' : count === 0 ? 'Click me' : `Clicked ${count}×`;
+
+  let caption = 'A real page: structure, look, and a little behavior.';
+  if (!on.html) caption = 'CSS and JavaScript have nothing to work with. HTML is the body.';
+  else if (on.html && !on.css && !on.js) caption = 'Bare HTML. The browser’s default look. It still counts as a website.';
+  else if (on.html && on.css && !on.js) caption = 'Now it has a look. Pretty, but it does not do anything yet.';
+  else if (on.html && !on.css && on.js) caption = 'It works, but it looks like 1995. That is CSS’s job.';
 
   return (
-    <section ref={sceneRef} id="ritual" className="scene-outer" aria-labelledby="scene-heading">
-      <motion.div className="scene-sticky" style={sceneStyle}>
-        <div className="scene-grid">
-          <motion.div className="scene-copy" style={copyStyle}>
-            <span className="micro-label scene-label">FIELD NOTE 001 <i /> THE HUMAN TRACE</span>
-            <h2 id="scene-heading">PERFUME,<br /><em>PERSONAL.</em></h2>
-            <p>A scent isn't a finishing touch. It's the thing people remember when the room has gone quiet.</p>
-            <a href="#about" className="round-link" aria-label="Discover our point of view"><ArrowIcon /></a>
-          </motion.div>
-
-          <motion.div className="ritual-card" style={cardStyle}>
-            <div className="ritual-card-top">
-              <span className="micro-label">THE FORMULA FOR A FEELING</span>
-              <span className="ritual-card-index">S/001 — 004</span>
-            </div>
-            <div className="ritual-window">
-              <motion.div className="ritual-reading-list" style={reduceMotion ? undefined : { y: readingY }}>
-                <div className="ritual-reading-item">
-                  <span className="ritual-number">01</span><div><span className="micro-label">FIRST IMPRESSION</span><h3>A bright little interruption.</h3><p>Yuzu peel, pink pepper, a flash of green.</p></div><span className="ritual-cross">×</span>
-                </div>
-                <div className="ritual-reading-item">
-                  <span className="ritual-number">02</span><div><span className="micro-label">CLOSE ENOUGH</span><h3>Warmth, not volume.</h3><p>Skin musk settles in; sandalwood stays awhile.</p></div><span className="ritual-cross">×</span>
-                </div>
-                <div className="ritual-reading-item">
-                  <span className="ritual-number">03</span><div><span className="micro-label">THE LAST WORD</span><h3>Something only you know.</h3><p>A trace of amber. A memory with no name.</p></div><span className="ritual-cross">×</span>
-                </div>
-                <div className="ritual-reading-item">
-                  <span className="ritual-number">04</span><div><span className="micro-label">THE DRY DOWN</span><h3>Nothing to prove.</h3><p>Quiet confidence, with a pulse underneath.</p></div><span className="ritual-cross">×</span>
-                </div>
-              </motion.div>
-            </div>
-            <div className="ritual-card-bottom"><span>COMPOSED IN SMALL BATCHES</span><span className="ritual-signal"><i /><i /><i /><i /><i /></span></div>
-          </motion.div>
-        </div>
-        <div className="scene-bottomline"><span>SCENT HAS A MEMORY.</span><span>SCROLL TO FOLLOW THE NOTES <b>↓</b></span></div>
-      </motion.div>
-    </section>
-  );
-}
-
-function CurtainSection({ reduceMotion }) {
-  const sectionRef = useRef(null);
-  const { scrollYProgress } = useScroll({ target: sectionRef, offset: ['start end', 'start start'] });
-  const waveX = useTransform(scrollYProgress, [0, 1], ['0%', '-25%']);
-
-  return (
-    <section ref={sectionRef} className="curtain-section" aria-labelledby="curtain-heading">
-      <motion.svg
-        className="curtain-wave"
-        viewBox="0 0 2880 100"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        style={reduceMotion ? undefined : { x: waveX }}
-      >
-        <path d="M0 48 C120 48 120 12 240 12 S360 48 480 48 S600 84 720 84 S840 48 960 48 S1080 12 1200 12 S1320 48 1440 48 S1560 84 1680 84 S1800 48 1920 48 S2040 12 2160 12 S2280 48 2400 48 S2520 84 2640 84 S2760 48 2880 48 V100 H0 Z" fill="currentColor" />
-      </motion.svg>
-      <div className="curtain-content">
-        <div className="curtain-topline"><span className="micro-label">A SMALL RITUAL. A BIG SHIFT.</span><span className="micro-label">SCENT IS THE SOUVENIR.</span></div>
-        <Reveal className="curtain-headline-wrap">
-          <h2 id="curtain-heading">WEAR YOUR<br /><em>OWN</em> ATMOSPHERE.</h2>
-        </Reveal>
-        <div className="curtain-bottomline">
-          <p>Layer it. Leave it. Make it yours.<br />There are no rules that smell this good.</p>
-          <a className="button button-outline-dark" href="#shop"><span>SHOP THE SCENT EDIT</span><ArrowIcon /></a>
-        </div>
-        <div className="curtain-stamp" aria-hidden="true">S / S<br />2025</div>
-      </div>
-    </section>
-  );
-}
-
-function DragCursor({ visible, dragging, x, y, reduceMotion }) {
-  const cursorX = useSpring(x, { stiffness: 300, damping: 25, mass: 0.5 });
-  const cursorY = useSpring(y, { stiffness: 300, damping: 25, mass: 0.5 });
-  if (reduceMotion) return null;
-  return (
-    <motion.div className={`drag-cursor ${visible ? 'is-visible' : ''}`} style={{ x: cursorX, y: cursorY, scale: dragging ? 0.9 : 1 }} aria-hidden="true">
-      <span>◀ DRAG ▶</span>
-    </motion.div>
-  );
-}
-
-function ProductCard({ product, index, onAdd, suppressClicksUntil }) {
-  const volume = product.volume || (index % 3 === 1 ? '30 ML' : '50 ML');
-  const titleWords = product.title.trim().split(/\s+/);
-  const titleSplit = Math.max(1, Math.ceil(titleWords.length / 2));
-  const titleLead = titleWords.slice(0, titleSplit).join(' ');
-  const titleTail = titleWords.slice(titleSplit).join(' ') || '\u00a0';
-  return (
-    <article className="fragrance-card">
-      <div className="product-card-topline">
-        <span className="micro-label">SILLAGE / {String(index + 1).padStart(2, '0')}</span>
-        <span className="product-tag">EAU DE PARFUM</span>
-      </div>
-      <div className="product-card-orbit" aria-hidden="true"><i /><i /><i /></div>
-      <div className="product-card-art"><ProductImage product={product} /></div>
-      <div className="product-card-body">
-        <div className="product-card-heading">
-          <div>
-            <span className="product-notes">{product.notes || NOTES[index % NOTES.length]}</span>
-            <h3><span>{titleLead}</span><em>{titleTail}</em></h3>
-          </div>
-          <span className="product-price">{formatPrice(product.price)}</span>
-        </div>
-        <div className="product-card-bottom">
-          <span className="product-volume">{volume} <i /> VEGAN · CRUELTY FREE</span>
+    <div style={{ marginTop: '2.4rem' }}>
+      <h3 className="serif" style={{ fontSize: '1.6rem', marginBottom: '0.7rem' }}>
+        Peel the layers off.
+      </h3>
+      <p style={{ color: 'var(--ink-soft)', marginBottom: '0.9rem' }}>
+        Turn pieces off. Watch the page lose its look, then its brains, then its body.
+      </p>
+      <div className="toggles" role="group" aria-label="Layer toggles">
+        {['html', 'css', 'js'].map((key) => (
           <button
-            type="button"
-            className="add-to-bag-button"
-            onClick={(event) => {
-              event.stopPropagation();
-              if (Date.now() < suppressClicksUntil.current) return;
-              onAdd(product);
-            }}
-            aria-label={`Add ${product.title} to bag for ${formatPrice(product.price)}`}
+            key={key}
+            className={`toggle ${key} ${on[key] ? 'is-on' : ''}`}
+            aria-pressed={on[key]}
+            onClick={() => setOn((s) => ({ ...s, [key]: !s[key] }))}
           >
-            <span>ADD TO BAG</span><span className="add-button-plus" aria-hidden="true">+</span>
+            {on[key] ? 'on' : 'off'} · {key.toUpperCase()}
           </button>
-        </div>
+        ))}
       </div>
-    </article>
-  );
-}
-
-function ShopCarousel({ products, onAdd, reduceMotion, catalogueState }) {
-  const viewportRef = useRef(null);
-  const trackRef = useRef(null);
-  const suppressClicksUntil = useRef(0);
-  const x = useMotionValue(0);
-  const mouseX = useMotionValue(-100);
-  const mouseY = useMotionValue(-100);
-  const [constraints, setConstraints] = useState({ left: 0, right: 0 });
-  const [atStart, setAtStart] = useState(true);
-  const [atEnd, setAtEnd] = useState(false);
-  const [cursorVisible, setCursorVisible] = useState(false);
-  const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    const track = trackRef.current;
-    if (!viewport || !track) return undefined;
-    const measure = () => {
-      const left = Math.min(0, viewport.clientWidth - track.scrollWidth);
-      setConstraints({ left, right: 0 });
-      if (x.get() < left) x.set(left);
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', measure);
-      return () => window.removeEventListener('resize', measure);
-    }
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewport);
-    observer.observe(track);
-    return () => observer.disconnect();
-  }, [products, x]);
-
-  useEffect(() => {
-    const updatePosition = (latest) => {
-      setAtStart(latest >= -1);
-      setAtEnd(latest <= constraints.left + 1);
-    };
-    updatePosition(x.get());
-    return x.on('change', updatePosition);
-  }, [x, constraints.left]);
-
-  const moveCarousel = (direction) => {
-    const card = trackRef.current?.firstElementChild;
-    const step = card ? card.getBoundingClientRect().width : 440;
-    const destination = Math.max(constraints.left, Math.min(0, x.get() + direction * step));
-    if (reduceMotion) {
-      x.set(destination);
-    } else {
-      animate(x, destination, { type: 'spring', stiffness: 260, damping: 30 });
-    }
-  };
-
-  const handlePointerMove = (event) => {
-    mouseX.set(event.clientX);
-    mouseY.set(event.clientY);
-  };
-
-  return (
-    <section id="shop" className="shop-section" aria-labelledby="shop-heading">
-      <div className="shop-heading-row">
-        <Reveal>
-          <span className="micro-label">THE SILLAGE SHELF <i className="live-dot" /></span>
-          <h2 id="shop-heading">Find your<br /><em>frequency.</em></h2>
-        </Reveal>
-        <div className="shop-heading-side">
-          <p>Four moods. No wrong answers.<br />Wear the one that feels like you.</p>
-          <div className="carousel-controls" aria-label="Carousel controls">
-            <button type="button" onClick={() => moveCarousel(1)} aria-label="Previous fragrances" disabled={atStart}>
-              <ArrowIcon direction="left" />
-            </button>
-            <button type="button" onClick={() => moveCarousel(-1)} aria-label="Next fragrances" disabled={atEnd}>
-              <ArrowIcon />
-            </button>
+      <div className="split-wide">
+        <div className="demo-frame">
+          <div className="demo-chrome">
+            <span className="traffic" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+            <div className="addr">preview — not on the internet</div>
           </div>
-        </div>
-      </div>
-      <div
-        className="carousel-viewport"
-        ref={viewportRef}
-        onMouseEnter={() => setCursorVisible(true)}
-        onMouseLeave={() => { setCursorVisible(false); setDragging(false); }}
-        onMouseMove={handlePointerMove}
-      >
-        <motion.div
-          ref={trackRef}
-          className="carousel-track"
-          drag="x"
-          dragConstraints={constraints}
-          dragElastic={0.05}
-          dragMomentum={!reduceMotion}
-          onDragStart={() => setDragging(true)}
-          onDragEnd={(_, info) => {
-            setDragging(false);
-            if (Math.abs(info.offset.x) > 8) suppressClicksUntil.current = Date.now() + 180;
-          }}
-          style={{ x }}
-        >
-          {products.map((product, index) => (
-            <ProductCard key={product.id} product={product} index={index} onAdd={onAdd} suppressClicksUntil={suppressClicksUntil} />
-          ))}
-        </motion.div>
-        <DragCursor visible={cursorVisible} dragging={dragging} x={mouseX} y={mouseY} reduceMotion={reduceMotion} />
-      </div>
-      <div className="shop-footline">
-        <span>DRAG THE SHELF TO EXPLORE <b>← →</b></span>
-        <span>{catalogueState === 'live' ? 'LIVE CATALOGUE · DUMMYJSON OPEN API' : catalogueState === 'loading' ? 'CONNECTING TO THE OPEN FRAGRANCE CATALOGUE…' : 'A CURATED DEMO · DUMMYJSON OPEN API'}</span>
-      </div>
-    </section>
-  );
-}
-
-function AboutOutro() {
-  return (
-    <section id="about" className="outro-section" aria-labelledby="outro-heading">
-      <div className="outro-topline"><span className="micro-label">THE SILLAGE POINT OF VIEW</span><span className="micro-label">LESS LOUD. MORE YOU.</span></div>
-      <div className="outro-title-wrap">
-        <h2 id="outro-heading" className="outro-title">SOME THINGS<br /><em>STAY</em> WITH YOU.</h2>
-      </div>
-      <div className="outro-lower">
-        <p>Good fragrance doesn't walk into a room before you do.<br />It simply gives the room something to remember.</p>
-        <a className="button button-lime" href="#shop"><span>MEET YOUR NEW SIGNATURE</span><ArrowIcon /></a>
-      </div>
-      <div className="outro-wordmark" aria-hidden="true">SILLAGE<span>.</span></div>
-    </section>
-  );
-}
-
-function FlipLink({ href, label, description }) {
-  return (
-    <a className="footer-flip-link" href={href}>
-      <span className="flip-link-face flip-link-front">{label}</span>
-      <span className="flip-link-face flip-link-back" aria-hidden="true">{description}</span>
-    </a>
-  );
-}
-
-function Footer({ newsletterEmail, setNewsletterEmail, onSubscribe, subscribed }) {
-  return (
-    <footer className="site-footer">
-      <div className="footer-top">
-        <div className="footer-brand-block">
-          <a className="footer-wordmark" href="#top">SILLAGE<span>.</span></a>
-          <p>Fragrance for the parts of you<br />that words never quite reach.</p>
-          <span className="micro-label">NEW YORK · EVERYWHERE</span>
-        </div>
-        <div className="footer-links-column">
-          <h2>EXPLORE</h2>
-          <FlipLink href="#shop" label="The scent shelf" description="Explore the edit" />
-          <FlipLink href="#ritual" label="Our ritual" description="A closer look" />
-          <FlipLink href="#about" label="The studio" description="Our point of view" />
-        </div>
-        <div className="footer-links-column">
-          <h2>THE DETAILS</h2>
-          <FlipLink href="#about" label="Ingredients" description="Good to know" />
-          <FlipLink href="#about" label="Shipping & returns" description="The fine print" />
-          <FlipLink href="#about" label="Care guide" description="Make it last" />
-        </div>
-        <div className="footer-newsletter">
-          <h2>GOOD THINGS, OCCASIONALLY.</h2>
-          <p>Notes from the studio. New drops. No noise.</p>
-          <form className="newsletter-form" onSubmit={onSubscribe}>
-            <label className="sr-only" htmlFor="newsletter-email">Email address</label>
-            <input id="newsletter-email" type="email" placeholder="YOUR EMAIL ADDRESS" value={newsletterEmail} onChange={(event) => setNewsletterEmail(event.target.value)} required />
-            <button type="submit" aria-label="Subscribe to the Sillage newsletter"><ArrowIcon /></button>
-          </form>
-          <span className="newsletter-status" aria-live="polite">{subscribed ? 'YOU’RE ON THE LIST. TALK SOON.' : 'A NOTE, NOT A NEWSLETTER.'}</span>
-        </div>
-      </div>
-      <div className="footer-bottom">
-        <span>© 2026 SILLAGE STUDIO</span>
-        <span>CATALOGUE IMAGERY VIA DUMMYJSON OPEN PRODUCTS API</span>
-        <div><a href="#top">INSTAGRAM ↗</a><a href="#top">CONTACT ↗</a></div>
-      </div>
-    </footer>
-  );
-}
-
-function BagDrawer({ open, items, onClose, onUpdateQuantity, reduceMotion }) {
-  const [checkoutNote, setCheckoutNote] = useState(false);
-  const quantity = items.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
-
-  useEffect(() => {
-    if (open) setCheckoutNote(false);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [open]);
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div className="bag-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={reduceMotion ? { duration: 0 } : { duration: 0.22 }} onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-          <motion.aside id="bag-drawer" className="bag-drawer" role="dialog" aria-modal="true" aria-labelledby="bag-heading" initial={{ x: reduceMotion ? 0 : '100%' }} animate={{ x: 0 }} exit={{ x: reduceMotion ? 0 : '100%' }} transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 310, damping: 32 }}>
-            <div className="bag-drawer-header">
-              <div><span className="micro-label">THE GOOD STUFF</span><h2 id="bag-heading">Your bag <em>({quantity})</em></h2></div>
-              <button className="bag-close-button" type="button" onClick={onClose} aria-label="Close shopping bag"><CloseIcon /></button>
-            </div>
-            {items.length ? (
-              <>
-                <div className="bag-items">
-                  {items.map(({ product, quantity: itemQuantity }) => (
-                    <article className="bag-item" key={product.id}>
-                      <ProductImage product={product} />
-                      <div className="bag-item-info"><span className="micro-label">EAU DE PARFUM</span><h3>{product.title}</h3><span>{formatPrice(product.price)}</span>
-                        <div className="quantity-control" aria-label={`Quantity for ${product.title}`}>
-                          <button type="button" onClick={() => onUpdateQuantity(product.id, -1)} aria-label={`Remove one ${product.title}`}>−</button><span>{itemQuantity}</span><button type="button" onClick={() => onUpdateQuantity(product.id, 1)} aria-label={`Add one ${product.title}`}>+</button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                <div className="bag-drawer-bottom">
-                  <div className="bag-subtotal"><span>SUBTOTAL</span><strong>{formatPrice(subtotal)}</strong></div>
-                  <p>Complimentary shipping on orders over $100.</p>
-                  <button className="button button-dark bag-checkout" type="button" onClick={() => setCheckoutNote(true)}><span>CONTINUE TO CHECKOUT</span><ArrowIcon /></button>
-                  {checkoutNote && <p className="checkout-note" role="status">Checkout isn’t connected in this preview yet — your bag is saved while you keep exploring.</p>}
-                  <button className="continue-shopping" type="button" onClick={onClose}>KEEP LOOKING</button>
-                </div>
-              </>
+          <div className="demo-body">
+            {!on.html ? (
+              <div className="demo-empty">Nothing here. No HTML, no page.</div>
             ) : (
-              <div className="bag-empty"><span className="bag-empty-glyph">S.</span><h3>Nothing in here<br />but possibility.</h3><p>Go find the feeling that follows you home.</p><button className="button button-dark" type="button" onClick={onClose}><span>BACK TO THE SHELF</span><ArrowIcon /></button></div>
+              <button
+                className={on.css ? 'pretty-btn' : 'plain-btn'}
+                onClick={() => on.js && setCount((n) => n + 1)}
+                type="button"
+              >
+                {label}
+              </button>
             )}
-          </motion.aside>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          </div>
+        </div>
+        <div>
+          <div className="code-stack">
+            <pre className={`code-block ${on.html ? '' : 'is-off'}`}>
+              <span className="lang">html</span>
+              {`<button id="btn">${label}</button>`}
+            </pre>
+            <pre className={`code-block ${on.css ? '' : 'is-off'}`}>
+              <span className="lang">css</span>
+              {`button {\n  background: #d63c1a;\n  color: white;\n  padding: 12px 18px;\n}`}
+            </pre>
+            <pre className={`code-block ${on.js ? '' : 'is-off'}`}>
+              <span className="lang">js</span>
+              {`btn.onclick = () => {\n  clicks++\n  btn.textContent = "Clicked " + clicks\n}`}
+            </pre>
+          </div>
+          <p className="note">{caption}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
-export default function App() {
-  const reduceMotion = useReducedMotion() ?? false;
-  const [products, setProducts] = useState(FALLBACK_PRODUCTS);
-  const [catalogueState, setCatalogueState] = useState('loading');
-  const [bagItems, setBagItems] = useState([]);
-  const [bagOpen, setBagOpen] = useState(false);
-  const [newsletterEmail, setNewsletterEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-
-  useEffect(() => {
-    if (reduceMotion) return undefined;
-    const lenis = new Lenis({
-      duration: 2.5,
-      easing: (time) => Math.min(1, 1.001 - 2 ** (-10 * time)),
-      smoothWheel: true,
-      wheelMultiplier: 0.6,
-      touchMultiplier: 2,
-    });
-    let animationFrame = 0;
-    const raf = (time) => {
-      lenis.raf(time);
-      animationFrame = window.requestAnimationFrame(raf);
-    };
-    animationFrame = window.requestAnimationFrame(raf);
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      lenis.destroy();
-    };
-  }, [reduceMotion]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => {
-      setCatalogueState('fallback');
-      controller.abort();
-    }, 8000);
-    fetch(PRODUCT_API, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Catalogue request failed: ${response.status}`);
-        return response.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data.products) && data.products.length) {
-          setProducts(normaliseProducts(data.products));
-          setCatalogueState('live');
-        } else {
-          setCatalogueState('fallback');
-        }
-      })
-      .catch((error) => {
-        if (error.name !== 'AbortError') setCatalogueState('fallback');
-      })
-      .finally(() => window.clearTimeout(timeoutId));
-    return () => {
-      window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, []);
-
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === 'Escape') setBagOpen(false);
-    }
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  const bagCount = bagItems.reduce((sum, item) => sum + item.quantity, 0);
-
-  const addToBag = (product) => {
-    setBagItems((items) => {
-      const existing = items.find((item) => item.product.id === product.id);
-      if (existing) return items.map((item) => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...items, { product, quantity: 1 }];
-    });
-    setBagOpen(true);
-  };
-
-  const updateQuantity = (id, delta) => {
-    setBagItems((items) => items
-      .map((item) => item.product.id === id ? { ...item, quantity: item.quantity + delta } : item)
-      .filter((item) => item.quantity > 0));
-  };
-
-  const subscribe = (event) => {
-    event.preventDefault();
-    if (!newsletterEmail.trim()) return;
-    setSubscribed(true);
-    setNewsletterEmail('');
-  };
+function Playground() {
+  const [code, setCode] = useState(STARTER);
+  const srcDoc = useMemo(() => code, [code]);
 
   return (
-    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'never'}>
-      <div className="site-shell">
-        <Header bagCount={bagCount} bagOpen={bagOpen} onBagClick={() => setBagOpen((open) => !open)} />
-        <main>
-          <Hero product={products[0] || FALLBACK_PRODUCTS[0]} reduceMotion={reduceMotion} />
-          <div className="black-stage">
-            <Marquee products={products} />
-            <StoryScene reduceMotion={reduceMotion} />
-            <CurtainSection reduceMotion={reduceMotion} />
-            <ShopCarousel products={products} onAdd={addToBag} reduceMotion={reduceMotion} catalogueState={catalogueState} />
-            <AboutOutro />
-          </div>
-        </main>
-        <Footer newsletterEmail={newsletterEmail} setNewsletterEmail={setNewsletterEmail} onSubscribe={subscribe} subscribed={subscribed} />
-        <BagDrawer open={bagOpen} items={bagItems} onClose={() => setBagOpen(false)} onUpdateQuantity={updateQuantity} reduceMotion={reduceMotion} />
+    <div className="play">
+      <div className="play-edit">
+        <header>
+          <span>index.html</span>
+          <button className="reset-btn" type="button" onClick={() => setCode(STARTER)}>
+            Reset
+          </button>
+        </header>
+        <textarea
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          spellCheck={false}
+          aria-label="HTML editor"
+        />
       </div>
-    </MotionConfig>
+      <div className="play-view">
+        <header>browser</header>
+        <iframe title="Live preview of your HTML" sandbox="allow-scripts" srcDoc={srcDoc} />
+      </div>
+    </div>
   );
 }
