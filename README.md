@@ -1,25 +1,38 @@
-# Sillage — Fragrance Studio
+# Discover — a Pinterest-style image discovery interface
 
-A responsive, editorial e-commerce landing page for a fictional independent perfume house. Built with React, Vite, Tailwind CSS, `motion/react`, and Lenis.
+A pixel-matched, responsive recreation of a Pinterest-inspired home feed: fixed 64px icon rail, search header, a single-line topic bar and a staggered masonry of images. Built with React, Vite and Lucide icons; images come from the [Openverse Images API](https://api.openverse.org/v1/images/).
 
 ## Run locally
 
 ```bash
 npm install
-npm run dev
+npm run dev      # http://localhost:5173
+npm run build
 ```
 
-Create a production build with `npm run build`.
+## Layout (1727 × 900 reference)
 
-## Product catalogue
+| Element | Geometry |
+| --- | --- |
+| Sidebar | 64px wide, fixed, 1px `#EFEFEF` right border; icon centres at y = 39 / 103 / 168 / 233 / 298 / 363 / 428 and gear at 859 |
+| Search | x = 78, y = 17, 44px tall, 12px radius, `#E7E7E2` |
+| Topics | 14px / 600, first label at x = 92, no wrapping, hidden scrollbar |
+| Feed | starts at y = 132; seven 219px columns, 14px gaps, last column ends at x ≈ 1697 |
+| Cards | 16px radius, 43px from image bottom to next image top (4px + 28px actions + 11px) |
 
-The storefront requests fragrance products from the public [DummyJSON products API](https://dummyjson.com/products/category/fragrances?limit=12). Product names, pricing, and product image URLs are used in the marquee, hero, and draggable shelf. If the API is unavailable, a small local demo catalogue and fallback imagery keep the page usable.
+Column count is derived from the feed's own width (7 → 6 → 5 → 3/4 → 2). Below 640px the rail becomes a bottom bar.
+
+## How the feed works
+
+- **Masonry** (`src/utils/layout.js`): every card's height comes from a known aspect ratio, so columns are computed up-front (no relayout when images load, stable order, no overlaps). On the first screen, 18 explicit *slots* (`src/data/heroSlots.js`) pin cards to columns with the reference heights; later cards go to the shortest column.
+- **Openverse** (`src/api/openverse.js`): the home feed runs the 12 curated queries; topics and search use their own. Results are normalised (every field except the image URL is optional), de-duplicated by id/URL, cached in memory + `sessionStorage`, and throttled client-side to stay under the anonymous limit (20 requests/min, 200/day). 429s are honoured via `Retry-After`. Images use `license_type=commercial` by default (changeable in *Feed options*) and `mature=false`.
+- **Failures**: each slot falls back to a bundled image/colour tile if its query fails, so the first screen is never blank. Broken image URLs retry `thumbnail → url → neutral placeholder`.
+- **Infinite scroll** loads further pages when the sentinel nears the viewport.
 
 ## Interactions
 
-- Explore menu with keyboard Escape support and a full-screen mobile sheet
-- Scroll-driven hero and story scene, plus two editorial product marquees
-- Draggable fragrance shelf with keyboard-accessible previous/next controls
-- Add-to-bag drawer with quantity controls
-- Newsletter form confirmation state
-- Lenis smooth scrolling and reduced-motion fallbacks
+Search (Enter, or debounced typing; voice via Web Speech API when supported; camera opens an honest dialog — no image recognition is performed), topic filters, card hover Save, three-dot menu (Save / Share link / View source), detail modal with creator, license and attribution, local saves (`localStorage`, view them from the grid icon), Create Pin (local-only), notifications / messages popovers, feed options (image type, license type), settings and account menus.
+
+## Attribution
+
+Fallback images in `public/fallback/` were AI-generated for this project. Everything else shown comes from Openverse and carries its own license; creator, license and source links are in each pin's detail view.
